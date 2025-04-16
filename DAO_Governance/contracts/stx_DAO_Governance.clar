@@ -83,3 +83,93 @@
     (ok true)
   )
 )
+
+;; DAO functions
+
+;; Mint governance tokens to an address (admin function in this example)
+;; In a real implementation, this would be controlled by a more sophisticated mechanism
+(define-public (mint (recipient principal) (amount uint))
+  (begin
+    (asserts! (> amount u0) ERR-ZERO-AMOUNT)
+    
+    ;; Update recipient balance
+    (map-set token-balances recipient 
+      (+ (default-to u0 (map-get? token-balances recipient)) amount)
+    )
+    
+    ;; Update total supply
+    (var-set token-supply (+ (var-get token-supply) amount))
+    
+    (print {type: "ft_mint_event", amount: amount, recipient: recipient})
+    (ok true)
+  )
+)
+
+; Create a new proposal
+(define-public (create-proposal 
+  (title (string-ascii 100)) 
+  (description (string-utf8 1000)) 
+  (link (string-ascii 255)))
+  
+  (let (
+    (new-proposal-id (var-get proposal-count))
+    (creator-balance (default-to u0 (map-get? token-balances tx-sender)))
+  )
+    ;; Check if creator has some tokens
+    (asserts! (> creator-balance u0) ERR-INSUFFICIENT-TOKENS)
+    
+    ;; Create proposal
+    (map-set proposals new-proposal-id {
+      creator: tx-sender,
+      title: title,
+      description: description,
+      link: link,
+      start-block-height: block-height,
+      end-block-height: (+ block-height (var-get voting-period)),
+      yes-votes: u0,
+      no-votes: u0,
+      executed: false
+    })
+    
+    ;; Increment proposal count
+    (var-set proposal-count (+ new-proposal-id u1))
+    
+    (ok new-proposal-id)
+  )
+)
+
+
+;; Vote on a proposal
+(define-public (vote (proposal-id uint) (vote-value bool))
+  (let (
+    (proposal (unwrap! (map-get? proposals proposal-id) ERR-PROPOSAL-DOES-NOT-EXIST))
+    (voter-balance (default-to u0 (map-get? token-balances tx-sender)))
+    (vote-key {proposal-id: proposal-id, voter: tx-sender})
+    (vote-info (map-get? votes vote-key))
+  )
+    ;; Check if voting period is active
+    (asserts! (<= (get start-block-height proposal) block-height) ERR-PROPOSAL-EXPIRED)
+    (asserts! (< block-height (get end-block-height proposal)) ERR-PROPOSAL-EXPIRED)
+    
+    ;; Check if voter has tokens and hasn't voted yet
+    (asserts! (> voter-balance u0) ERR-INSUFFICIENT-TOKENS)
+    (asserts! (is-none vote-info) ERR-ALREADY-VOTED)
+    
+    ;; Record vote
+    (map-set votes vote-key {
+      voted: true,
+      vote: vote-value,
+      weight: voter-balance
+    })
+    
+    ;; Update vote tallies
+    (if vote-value
+      (map-set proposals proposal-id 
+        (merge proposal {yes-votes: (+ (get yes-votes proposal) voter-balance)}))
+      (map-set proposals proposal-id 
+        (merge proposal {no-votes: (+ (get no-votes proposal) voter-balance)}))
+    )
+    
+    (ok true)
+  )
+)

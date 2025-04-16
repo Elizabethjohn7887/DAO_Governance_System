@@ -173,3 +173,32 @@
     (ok true)
   )
 )
+
+;; Execute a proposal after voting period has ended
+(define-public (execute-proposal (proposal-id uint))
+  (let (
+    (proposal (unwrap! (map-get? proposals proposal-id) ERR-PROPOSAL-DOES-NOT-EXIST))
+    (total-votes (+ (get yes-votes proposal) (get no-votes proposal)))
+    (total-supply (var-get token-supply))
+    (quorum-threshold (/ (* total-supply (var-get quorum-percentage)) u100))
+  )
+    ;; Check if voting period has ended
+    (asserts! (>= block-height (get end-block-height proposal)) ERR-PROPOSAL-NOT-ENDED)
+    
+    ;; Check if proposal has already been executed
+    (asserts! (not (get executed proposal)) ERR-NOT-AUTHORIZED)
+    
+    ;; Check if quorum was reached
+    (asserts! (>= total-votes quorum-threshold) ERR-QUORUM-NOT-REACHED)
+    
+    ;; Mark proposal as executed
+    (map-set proposals proposal-id (merge proposal {executed: true}))
+    
+    ;; For demonstration purposes, just return the result
+    ;; In a real implementation, this would trigger some on-chain action
+    (if (> (get yes-votes proposal) (get no-votes proposal))
+      (ok (some true))  ;; Proposal passed
+      (ok (some false)) ;; Proposal rejected
+    )
+  )
+)

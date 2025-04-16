@@ -6,75 +6,49 @@
 
 
 
-;; Constants
-(define-constant contract-owner tx-sender)
-(define-constant governance-contract .dao-governance)
-(define-constant err-invalid-caller (err u100))
-(define-constant err-execution-failed (err u101))
+;; Define constants
+(define-constant ERR-NOT-AUTHORIZED (err u100))
+(define-constant ERR-PROPOSAL-DOES-NOT-EXIST (err u101))
+(define-constant ERR-PROPOSAL-EXPIRED (err u102))
+(define-constant ERR-ALREADY-VOTED (err u103))
+(define-constant ERR-INSUFFICIENT-TOKENS (err u104))
+(define-constant ERR-QUORUM-NOT-REACHED (err u105))
+(define-constant ERR-PROPOSAL-NOT-ENDED (err u106))
+(define-constant ERR-ZERO-AMOUNT (err u107))
 
-;; Function to execute a proposal approved by governance
-(define-public (execute-dao-proposal 
-  (target-contract principal)
-  (function-name (string-ascii 128))
-  (function-args (list 20 (string-utf8 256))))
-  (begin
-    ;; Only the governance contract can call this
-    (asserts! (is-eq tx-sender governance-contract) err-invalid-caller)
-    
-    ;; Execute the function call using the contract-call? primitive
-    ;; This is a simplified implementation - in practice, you would need to
-    ;; handle different argument types and contract call patterns
-    (try! (dynamic-contract-call target-contract function-name function-args))
-    
-    (ok true)
-  )
-)
-
-;; Constants
-(define-constant contract-owner tx-sender)
-(define-constant err-owner-only (err u100))
-(define-constant err-not-authorized (err u101))
-(define-constant err-invalid-proposal (err u102))
-(define-constant err-proposal-exists (err u103))
-(define-constant err-proposal-not-found (err u104))
-(define-constant err-proposal-not-active (err u105))
-(define-constant err-already-voted (err u106))
-(define-constant err-invalid-vote (err u107))
-(define-constant err-insufficient-tokens (err u108))
-(define-constant err-quorum-not-reached (err u109))
-(define-constant err-proposal-not-passed (err u110))
-(define-constant err-proposal-timelock (err u111))
-(define-constant err-proposal-expired (err u112))
-(define-constant err-invalid-parameter (err u113))
-
-;; Governance parameters
-(define-data-var proposal-threshold uint u100000000) ;; 1% of total supply (assuming 10B tokens)
-(define-data-var discussion-period uint u144) ;; ~7 days (in blocks, assuming 10 min blocks)
-(define-data-var voting-period uint u100) ;; ~5 days (in blocks)
-(define-data-var quorum-requirement uint u2000) ;; 20% of total supply 
-(define-data-var majority-requirement uint u5000) ;; 50% of votes must be "For"
-(define-data-var timelock-period uint u28) ;; ~48 hours (in blocks)
-(define-data-var emergency-threshold uint u8000) ;; 80% required for emergency actions
+;; Define data variables
+(define-data-var token-name (string-ascii 32) "DAO-TOKEN")
+(define-data-var token-symbol (string-ascii 10) "DAO")
+(define-data-var token-decimals uint u6)
+(define-data-var token-supply uint u0)
+(define-data-var proposal-count uint u0)
+(define-data-var quorum-percentage uint u51) ;; 51% required for quorum
+(define-data-var voting-period uint u144) ;; ~1 day (assuming 10 minute blocks)
 
 
-;; Proposal structure
+;; Define data maps
+(define-map token-balances principal uint)
 (define-map proposals
   uint
   {
-    proposer: principal,
-    description: (string-utf8 500),
-    link: (string-utf8 256), ;; Link to proposal details
-    target-contract: principal,
-    function-name: (string-ascii 128),
-    function-args: (list 20 (string-utf8 256)), ;; Serialized function arguments
-    start-block: uint,
-    end-block: uint,
-    executed: bool,
-    execution-block: (optional uint),
-    votes-for: uint,
-    votes-against: uint,
-    abstained: uint,
-    is-emergency: bool,
-    status: (string-ascii 20) ;; "ACTIVE", "PASSED", "REJECTED", "EXECUTED", "EXPIRED"
+    creator: principal,
+    title: (string-ascii 100),
+    description: (string-utf8 1000),
+    link: (string-ascii 255),
+    start-block-height: uint,
+    end-block-height: uint,
+    yes-votes: uint,
+    no-votes: uint,
+    executed: bool
   }
+)
+
+(define-map votes
+  {proposal-id: uint, voter: principal}
+  {voted: bool, vote: bool, weight: uint}
+)
+
+;; SIP-010 fungible token compliance functions
+(define-read-only (get-name)
+  (ok (var-get token-name))
 )

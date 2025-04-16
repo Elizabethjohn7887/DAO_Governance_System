@@ -52,3 +52,34 @@
 (define-read-only (get-name)
   (ok (var-get token-name))
 )
+
+(define-read-only (get-symbol)
+  (ok (var-get token-symbol))
+)
+
+(define-read-only (get-decimals)
+  (ok (var-get token-decimals))
+)
+
+(define-read-only (get-balance (account principal))
+  (ok (default-to u0 (map-get? token-balances account)))
+)
+
+(define-read-only (get-total-supply)
+  (ok (var-get token-supply))
+)
+
+(define-public (transfer (amount uint) (sender principal) (recipient principal) (memo (optional (buff 34))))
+  (let ((sender-balance (default-to u0 (map-get? token-balances sender))))
+    (asserts! (is-eq tx-sender sender) ERR-NOT-AUTHORIZED)
+    (asserts! (<= amount sender-balance) ERR-INSUFFICIENT-TOKENS)
+    (asserts! (> amount u0) ERR-ZERO-AMOUNT)
+    
+    (map-set token-balances sender (- sender-balance amount))
+    (map-set token-balances recipient 
+      (+ (default-to u0 (map-get? token-balances recipient)) amount)
+    )
+    (print {type: "ft_transfer_event", amount: amount, sender: sender, recipient: recipient})
+    (ok true)
+  )
+)

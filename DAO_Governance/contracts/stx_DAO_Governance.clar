@@ -202,3 +202,37 @@
     )
   )
 )
+
+
+;; Get proposal details
+(define-read-only (get-proposal (proposal-id uint))
+  (map-get? proposals proposal-id)
+)
+
+;; Get vote details
+(define-read-only (get-vote (proposal-id uint) (voter principal))
+  (map-get? votes {proposal-id: proposal-id, voter: voter})
+)
+
+;; Calculate if a proposal has passed (can be called at any time)
+(define-read-only (has-proposal-passed (proposal-id uint))
+  (let (
+    (proposal (unwrap! (map-get? proposals proposal-id) ERR-PROPOSAL-DOES-NOT-EXIST))
+    (total-votes (+ (get yes-votes proposal) (get no-votes proposal)))
+    (total-supply (var-get token-supply))
+    (quorum-threshold (/ (* total-supply (var-get quorum-percentage)) u100))
+  )
+    (if (and 
+         (>= block-height (get end-block-height proposal))
+         (>= total-votes quorum-threshold)
+         (> (get yes-votes proposal) (get no-votes proposal)))
+      (ok true)
+      (ok false)
+    )
+  )
+)
+
+;; Get number of proposals
+(define-read-only (get-proposal-count)
+  (var-get proposal-count)
+)
